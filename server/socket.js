@@ -76,11 +76,13 @@ module.exports = function(server,game) {
                 res['api_version'] = config.GAME_API_VERSION;
                 res['chat'] = []; // TODO: remove after getting rid of play-old
                 // Strip all player info except for this user.
+
                 res['table_history'] = game.gameHistory.getHistory().map(function(game) {
                     var res = _.pick(game, ['game_id', 'game_crash', 'hash']); // Skip 'created'
                     res.player_info = loggedIn ? _.pick(game.player_info, loggedIn.username) : {};
                     return res;
                 });
+
                 res['username'] = loggedIn ? loggedIn.username : null;
                 res['balance_satoshis'] = loggedIn ? loggedIn.balance_satoshis : null;
                 ack(null, res);

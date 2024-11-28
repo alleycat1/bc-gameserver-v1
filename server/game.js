@@ -18,7 +18,7 @@ function Game(lastGameId, lastHash, bankroll, gameHistory) {
     self.bankroll = bankroll;
     self.maxWin = 0;
 
-    self.controllerIsRunning = false; // if we are running games. there can still be a game in progress
+    self.controllerIsRunning = true; // if we are running games. there can still be a game in progress
     self.startTime; // time game started. If before game started, is an estimate...
     self.crashPoint; // when the game crashes, 0 means instant crash
     self.gameDuration; // how long till the game will crash..
@@ -55,10 +55,10 @@ function Game(lastGameId, lastHash, bankroll, gameHistory) {
     // cashouts to the database and calling the client callback.
     self.cacheCashoutTasks = [];
 
+    runGame();
+    
     events.EventEmitter.call(self);
-
     function runGame() {
-
         db.createGame(self.gameId + 1, function (err, info) {
             if (err) {
                 console.log('Could not create game', err, ' retrying in 2 sec..');

@@ -4,7 +4,16 @@ var uuid = require('uuid');
 var async = require('async');
 var lib = require('./lib');
 var pg = require('pg').native;
+const { Client } = require('pg');
 var config = require('./config');
+
+var db_config = {
+    user: "bustabit", // name of the user account
+    database: "bustabitdb", // name of the database
+    password: "bustabit",
+    max: 50, // max number of clients in the pool
+    idleTimeoutMillis: 30000 
+}
 
 if (!config.DATABASE_URL)
     throw new Error('must set DATABASE_URL environment var');
@@ -17,7 +26,7 @@ console.log('DATABASE_URL: ', config.DATABASE_URL);
 // of 90-100 players per game, an increase to 40 seems reasonable to
 // ensure that most queries are submitted after around 2 round-trip
 // waiting time or less.
-pg.defaults.poolSize = 40;
+//pg.defaults.poolSize = 40;
 
 // The default timeout is 30s, or the time from 1.00x to 6.04x.
 // Considering that most of the action happens during the beginning
@@ -25,7 +34,7 @@ pg.defaults.poolSize = 40;
 // games only to be reconnected when lots of bets come in again during
 // the next game. Bump the timeout to 2 min (or 1339.43x) to smooth
 // this out.
-pg.defaults.poolIdleTimeout = 120000;
+//pg.defaults.poolIdleTimeout = 120000;
 
 pg.types.setTypeParser(20, function(val) { // parse int8 as an integer
     return val === null ? null : parseInt(val);
@@ -36,9 +45,22 @@ pg.types.setTypeParser(1700, function(val) { // parse numeric as a float
 });
 
 // callback is called with (err, client, done)
-function connect(callback) {
-    return pg.connect(config.DATABASE_URL, callback);
+function done(client){
+    client.release()
 }
+
+var pool = new pg.Pool(db_config);
+
+function connect(callback) {
+    const client = new Client({
+        connectionString: config.DATABASE_URL
+        });
+    client.connect(function(err) {
+        callback(err, client, done);
+    });
+    //return pg.connect(config.DATABASE_URL, callback);
+}
+
 
 function query(query, params, callback) {
     //third parameter is optional
@@ -49,10 +71,10 @@ function query(query, params, callback) {
 
     doIt();
     function doIt() {
-        connect(function(err, client, done) {
+        pool.connect(function(err, client, done) {
             if (err) return callback(err);
             client.query(query, params, function(err, result) {
-                done();
+                done(client);
                 if (err) {
                     if (err.code === '40P01' || err.sqlState === '40P01') {
                         console.log('Warning: Retrying deadlocked transaction: ', query, params);
@@ -71,7 +93,7 @@ function getClient(runner, callback) {
     doIt();
 
     function doIt() {
-        connect(function (err, client, done) {
+        pool.connect(function (err, client, done) {
             if (err) return callback(err);
 
             function rollback(err) {
@@ -97,7 +119,7 @@ function getClient(runner, callback) {
                         if (err)
                             return rollback(err);
 
-                        done();
+                        done(client);
                         callback(null, data);
                     });
                 });
@@ -109,9 +131,11 @@ function getClient(runner, callback) {
 
 exports.query = query;
 
+/*
 pg.on('error', function(err) {
     console.error('POSTGRES EMITTED AN ERROR', err);
 });
+*/
 
 // runner takes (client, callback)
 
